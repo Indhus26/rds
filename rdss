@@ -2,41 +2,46 @@ provider "aws" {
   region = "us-east-1"
 }
 
+# Reference existing VPC
 data "aws_vpc" "existing_vpc" {
   id = "vpc-0867269f9b07046e9"
 }
 
+# Subnet A
 resource "aws_subnet" "subnet_a" {
   vpc_id            = data.aws_vpc.existing_vpc.id
   cidr_block        = "10.0.16.0/24"
   availability_zone = "us-east-1a"
 
   tags = {
-    Name = "Example-Subnet-A"
+    Name = "RDS-Subnet-A"
   }
 }
 
+# Subnet B
 resource "aws_subnet" "subnet_b" {
   vpc_id            = data.aws_vpc.existing_vpc.id
   cidr_block        = "10.0.17.0/24"
   availability_zone = "us-east-1b"
 
   tags = {
-    Name = "Example-Subnet-B"
+    Name = "RDS-Subnet-B"
   }
 }
 
+# Internet Gateway
 resource "aws_internet_gateway" "gw" {
   vpc_id = data.aws_vpc.existing_vpc.id
 
   tags = {
-    Name = "datasource-Terraform-internet-gateway"
+    Name = "RDS-Internet-Gateway"
   }
 }
 
+# Security Group
 resource "aws_security_group" "rds_sg" {
-  name        = "rds-security-group"
-  description = "Allow RDS access"
+  name        = "rds-sg"
+  description = "Allow MySQL access"
   vpc_id      = data.aws_vpc.existing_vpc.id
 
   ingress {
@@ -54,22 +59,21 @@ resource "aws_security_group" "rds_sg" {
   }
 
   tags = {
-    Name = "rds-sg"
+    Name = "RDS-SG"
   }
 }
 
+# Subnet Group
 resource "aws_db_subnet_group" "rds_subnet_group" {
   name       = "rds-subnet-group"
-  subnet_ids = [
-    aws_subnet.subnet_a.id,
-    aws_subnet.subnet_b.id
-  ]
+  subnet_ids = [aws_subnet.subnet_a.id, aws_subnet.subnet_b.id]
 
   tags = {
     Name = "RDS Subnet Group"
   }
 }
 
+# RDS Instance
 resource "aws_db_instance" "example_rds" {
   identifier              = "example-rds"
   allocated_storage       = 20
@@ -78,14 +82,21 @@ resource "aws_db_instance" "example_rds" {
   instance_class          = "db.t3.micro"
   db_name                 = "exampledb"
   username                = "admin"
-  password                = "YourSecurePassword123!" # Use Spacelift context or variable in production
+  password                = var.db_password
   db_subnet_group_name    = aws_db_subnet_group.rds_subnet_group.name
   vpc_security_group_ids  = [aws_security_group.rds_sg.id]
   skip_final_snapshot     = true
   publicly_accessible     = false
+  apply_immediately       = true
 
   tags = {
     Name = "Example-RDS"
   }
 }
-``
+
+# Variable for password (use Spacelift context or tfvars)
+variable "db_password" {
+  description = "RDS admin password"
+  type        = string
+  sensitive   = true
+}
